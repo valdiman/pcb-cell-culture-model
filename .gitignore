@@ -18,7 +18,6 @@
 .DS_Store
 
 # Ignore data/output and other generated file types
-*.csv
 *.log
 *.tmp
 *.png
