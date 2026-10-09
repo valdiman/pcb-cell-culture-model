@@ -62,7 +62,7 @@ pcb_partition <- merge(pcb[, c("congener", "logK_lipid_water",
                        by = "congener", all = TRUE)
 
 # Save dataset
-write.csv(pcb_partition, "Data/PCB_partition_coefficients.csv",
+write.csv(pcb_partition, "Output/Data/PCB_partition_coefficients.csv",
           row.names = FALSE)
 
 
