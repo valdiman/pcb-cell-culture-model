@@ -1,6 +1,5 @@
-# Code developed to calculate fractions of selected PCBs and
-# their metabolites (i.e., OH-PCBs and OH-PCB sulfates) in
-# well experiments and create figures (Figure 7 A and B)
+# Code developed to calculate fractions of PCBs in Aroclor 1254
+# in well experiments and create figures
 
 # Install packages and load libraries -------------------------------------
 # Packages
