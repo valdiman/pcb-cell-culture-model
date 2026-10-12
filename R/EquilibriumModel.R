@@ -1,5 +1,5 @@
 # Code developed to calculate fractions of PCBs in Aroclor 1254
-# in well experiments and create figures
+# in 35-mm disc experiments (24 hours) and create figures
 
 # Install packages and load libraries -------------------------------------
 # Packages
@@ -62,9 +62,7 @@ fraction <- function(logKa.w, logKlip.w, logKpro.w)
   V.water.cell <- C.water.cell * Cell / 10^6  # L
   
   # Overall denominator
-  den <- 1 +
-    10^logKlip.w * C.lipid +
-    10^logKpro.w * C.prot +
+  den <- 1 + 10^logKlip.w * C.lipid + 10^logKpro.w * C.prot +
     10^logKa.w * Va / (Vm - V.water.cell)
   
   # Fractions in dish
@@ -84,53 +82,25 @@ fraction <- function(logKa.w, logKlip.w, logKpro.w)
   f.lip.c <- f.lip / f.cell
   f.prot.c <- f.prot / f.cell
   
-  return(c(
-    f.dis.m,
-    f.dis.c,
-    f.lip,
-    f.prot,
-    f.air,
-    f.cell,
-    f.dis.c.c,
-    f.lip.c,
-    f.prot.c
-  ))
+  return(c(f.dis.m, f.dis.c, f.lip, f.prot, f.air, f.cell, f.dis.c.c,
+           f.lip.c, f.prot.c))
 }
 
 # Calculate fractions for all PCBs ----------------------------------------
 num.congener <- length(congener)
 result <- NULL
 for (i in seq_len(num.congener)) {
-  
-  result <- rbind(
-    result,
-    fraction(
-      logKa.w  = logKa.w[i],
-      logKlip.w = logKlip.w[i],
-      logKpro.w = logKpro.w[i]
-    )
-  )
+  result <- rbind(result, fraction(logKa.w  = logKa.w[i],
+                                   logKlip.w = logKlip.w[i],
+                                   logKpro.w = logKpro.w[i]))
 }
 
-final.result <- data.frame(
-  congener = congener,
-  PCB_number = pc$PCB_number,
-  result
-)
+final.result <- data.frame(congener = congener, result)
 
-names(final.result) <- c(
-  "congener",
-  "PCB_number",
-  "fract.diss.m",
-  "fract.diss.cell",
-  "fract.lip",
-  "fract.prot",
-  "fract.air",
-  "fract.cell",
-  "fract.diss.cell.cell",
-  "fract.lip.cell",
-  "fract.prot.cell"
-)
+names(final.result) <- c("congener", "fract.diss.m", "fract.diss.cell",
+                         "fract.lip", "fract.prot", "fract.air", "fract.cell",
+                         "fract.diss.cell.cell", "fract.lip.cell",
+                         "fract.prot.cell")
 
 head(final.result)
 tail(final.result)
@@ -152,27 +122,22 @@ final.result$sum.cell <-
 range(final.result$sum.cell)
 
 # Export results
-write.csv(final.result, file = "Output/Data/PCB_fractions.csv", row.names = FALSE)
+write.csv(final.result, file = "Output/Data/PCB_fractions.csv",
+          row.names = FALSE)
 
 # Aroclor 1254 model ------------------------------------------------------
-
-# Read individual PCB composition
-A1254 <- read.csv(
-  "Data/Aroclor1254_Frame.csv",
-  stringsAsFactors = FALSE
-)
-
+# Read individual PCB composition from Frame
+# This is needed to get the fraction of each congener, so then
+# the coeluting congeners can be calculated.
+A1254 <- read.csv("Data/Aroclor1254_Frame.csv", stringsAsFactors = FALSE)
 
 # Clean Aroclor composition -----------------------------------------------
-
 # Replace blank values and NM with zero
 A1254$A1254_fractionV1[
-  trimws(A1254$A1254_fractionV1) %in% c("", "NM")
-] <- "0"
+  trimws(A1254$A1254_fractionV1) %in% c("", "NM")] <- "0"
 
 A1254$A1254_fractionV2[
-  trimws(A1254$A1254_fractionV2) %in% c("", "NM")
-] <- "0"
+  trimws(A1254$A1254_fractionV2) %in% c("", "NM")] <- "0"
 
 # Convert to numeric
 A1254$A1254_fractionV1 <- as.numeric(A1254$A1254_fractionV1)
@@ -183,359 +148,186 @@ A1254$A1254_fractionV1 <- A1254$A1254_fractionV1 / 100
 A1254$A1254_fractionV2 <- A1254$A1254_fractionV2 / 100
 
 # Normalize original Aroclor compositions to sum to 1
-A1254$A1254_fractionV1 <-
-  A1254$A1254_fractionV1 /
-  sum(A1254$A1254_fractionV1)
+A1254$A1254_fractionV1 <- A1254$A1254_fractionV1 / sum(A1254$A1254_fractionV1)
 
-A1254$A1254_fractionV2 <-
-  A1254$A1254_fractionV2 /
-  sum(A1254$A1254_fractionV2)
+A1254$A1254_fractionV2 <- A1254$A1254_fractionV2 / sum(A1254$A1254_fractionV2)
 
 # Check
 sum(A1254$A1254_fractionV1)
 sum(A1254$A1254_fractionV2)
 
-
 # Match Aroclor composition with PCB fraction model -----------------------
-
-idx <- match(
-  A1254$congener,
-  final.result$congener
-)
+idx <- match(A1254$congener, final.result$congener)
 
 # Check that all congeners were matched
 A1254$congener[is.na(idx)]
 
 # Combine composition with PCB-specific fraction results
-A1254.model <- cbind(
-  A1254,
-  final.result[
-    idx,
-    setdiff(
-      names(final.result),
-      c("congener", "PCB_number")
-    ),
-    drop = FALSE
-  ]
-)
-
+A1254.model <- cbind(A1254, final.result[idx, setdiff(names(final.result),
+                                                      c("congener")),
+                                         drop = FALSE])
 
 # Analytical reporting exclusions ----------------------------------------
+# PCB204 is used as an internal standard.
+A1254_Le <- read.csv("Data/Aroclor1254_Lehmler.csv", stringsAsFactors = FALSE)
+A1254.groups <- A1254_Le$congener
 
-# PCB128 is used as an analytical surrogate.
-# PCB166 coelutes with PCB128.
-# Neither is included in the reported PCB composition.
-
-exclude_PCBs <- c("PCB128", "PCB166")
-
-# Set excluded congeners to zero BEFORE reportable normalization
-A1254.model$A1254_fractionV1_reported <-
-  A1254.model$A1254_fractionV1
-
-A1254.model$A1254_fractionV2_reported <-
-  A1254.model$A1254_fractionV2
-
-A1254.model$A1254_fractionV1_reported[
-  A1254.model$congener %in% exclude_PCBs
-] <- 0
-
-A1254.model$A1254_fractionV2_reported[
-  A1254.model$congener %in% exclude_PCBs
-] <- 0
-
-# Normalize analytically reportable composition to sum to 1
-A1254.model$A1254_fractionV1_reported <-
-  A1254.model$A1254_fractionV1_reported /
-  sum(A1254.model$A1254_fractionV1_reported)
-
-A1254.model$A1254_fractionV2_reported <-
-  A1254.model$A1254_fractionV2_reported /
-  sum(A1254.model$A1254_fractionV2_reported)
-
-# Check
-sum(A1254.model$A1254_fractionV1_reported)
-sum(A1254.model$A1254_fractionV2_reported)
-
-# Calculate Aroclor 1254 distribution ------------------------------------
-
-# Version 1
-A1254.model$V1_diss_m <-
-  A1254.model$A1254_fractionV1_reported *
-  A1254.model$fract.diss.m
-
-A1254.model$V1_diss_cell <-
-  A1254.model$A1254_fractionV1_reported *
-  A1254.model$fract.diss.cell
-
-A1254.model$V1_lipid <-
-  A1254.model$A1254_fractionV1_reported *
-  A1254.model$fract.lip
-
-A1254.model$V1_protein <-
-  A1254.model$A1254_fractionV1_reported *
-  A1254.model$fract.prot
-
-A1254.model$V1_air <-
-  A1254.model$A1254_fractionV1_reported *
-  A1254.model$fract.air
-
-A1254.model$V1_cell <-
-  A1254.model$A1254_fractionV1_reported *
-  A1254.model$fract.cell
-
-
-# Version 2
-A1254.model$V2_diss_m <-
-  A1254.model$A1254_fractionV2_reported *
-  A1254.model$fract.diss.m
-
-A1254.model$V2_diss_cell <-
-  A1254.model$A1254_fractionV2_reported *
-  A1254.model$fract.diss.cell
-
-A1254.model$V2_lipid <-
-  A1254.model$A1254_fractionV2_reported *
-  A1254.model$fract.lip
-
-A1254.model$V2_protein <-
-  A1254.model$A1254_fractionV2_reported *
-  A1254.model$fract.prot
-
-A1254.model$V2_air <-
-  A1254.model$A1254_fractionV2_reported *
-  A1254.model$fract.air
-
-A1254.model$V2_cell <-
-  A1254.model$A1254_fractionV2_reported *
-  A1254.model$fract.cell
-
-# Analytical PCB grouping -------------------------------------------------
-
-A1254.groups <- read.csv(
-  "Data/Aroclor1254_composition.csv",
-  stringsAsFactors = FALSE
-)
-
-# Function to combine coeluting congeners ---------------------------------
-
-combine_PCB_group <- function(group_name, data) {
-  
+combine_PCB_group <- function(group_name, data, weight_col) {
   # Example:
-  # "PCB18/30" -> c("PCB18", "PCB30")
-  pcb_numbers <- strsplit(
-    sub("^PCB", "", group_name),
-    "/"
-  )[[1]]
+  # "PCB4/10" -> c("PCB4", "PCB10")
+  pcb_numbers <- strsplit(sub("^PCB", "", group_name), "/")[[1]]
   
   pcb_names <- paste0("PCB", pcb_numbers)
   
-  # Select individual congeners in analytical group
+  # Select congeners belonging to analytical group
   x <- data[data$congener %in% pcb_names, ]
+  
+  # Check that all expected congeners were found
+  if (nrow(x) != length(pcb_names)) {
+    warning(paste("Not all congeners found for group:", group_name))
+  }
+  
+  # Aroclor abundance
+  w <- x[[weight_col]]
+  w_total <- sum(w)
+  
+  # Individual congener
+  
+  if (length(pcb_names) == 1) {
+    
+    return(
+      data.frame(
+        congener = group_name,
+        A1254_fraction = w_total,
+        
+        fract.diss.m = x$fract.diss.m,
+        fract.diss.cell = x$fract.diss.cell,
+        fract.lip = x$fract.lip,
+        fract.prot = x$fract.prot,
+        fract.air = x$fract.air,
+        fract.cell = x$fract.cell,
+        fract.diss.cell.cell = x$fract.diss.cell.cell,
+        fract.lip.cell = x$fract.lip.cell,
+        fract.prot.cell = x$fract.prot.cell))
+  }
+  
+  # Coeluting congeners with nonzero Aroclor abundance
+  
+  if (w_total > 0) {
+    
+    return(
+      data.frame(
+        congener = group_name,
+        A1254_fraction = w_total,
+        
+        fract.diss.m =
+          sum(w * x$fract.diss.m) / w_total,
+        
+        fract.diss.cell =
+          sum(w * x$fract.diss.cell) / w_total,
+        
+        fract.lip =
+          sum(w * x$fract.lip) / w_total,
+        
+        fract.prot =
+          sum(w * x$fract.prot) / w_total,
+        
+        fract.air =
+          sum(w * x$fract.air) / w_total,
+        
+        fract.cell =
+          sum(w * x$fract.cell) / w_total,
+        
+        fract.diss.cell.cell =
+          sum(w * x$fract.diss.cell.cell) / w_total,
+        
+        fract.lip.cell =
+          sum(w * x$fract.lip.cell) / w_total,
+        
+        fract.prot.cell =
+          sum(w * x$fract.prot.cell) / w_total))
+  }
+  
+  # Coeluting group with zero abundance
+  # Weighted averaging is impossible because all weights are zero.
+  # Use unweighted mean of the individual PCB partition fractions.
   
   data.frame(
     congener = group_name,
+    A1254_fraction = 0,
     
-    # Reportable Aroclor composition
-    A1254_fractionV1 =
-      sum(x$A1254_fractionV1_reported),
-    
-    A1254_fractionV2 =
-      sum(x$A1254_fractionV2_reported),
-    
-    # Version 1
-    V1_diss_m    = sum(x$V1_diss_m),
-    V1_diss_cell = sum(x$V1_diss_cell),
-    V1_lipid     = sum(x$V1_lipid),
-    V1_protein   = sum(x$V1_protein),
-    V1_air       = sum(x$V1_air),
-    V1_cell      = sum(x$V1_cell),
-    
-    # Version 2
-    V2_diss_m    = sum(x$V2_diss_m),
-    V2_diss_cell = sum(x$V2_diss_cell),
-    V2_lipid     = sum(x$V2_lipid),
-    V2_protein   = sum(x$V2_protein),
-    V2_air       = sum(x$V2_air),
-    V2_cell      = sum(x$V2_cell)
-  )
+    fract.diss.m = mean(x$fract.diss.m),
+    fract.diss.cell = mean(x$fract.diss.cell),
+    fract.lip = mean(x$fract.lip),
+    fract.prot = mean(x$fract.prot),
+    fract.air = mean(x$fract.air),
+    fract.cell = mean(x$fract.cell),
+    fract.diss.cell.cell = mean(x$fract.diss.cell.cell),
+    fract.lip.cell = mean(x$fract.lip.cell),
+    fract.prot.cell = mean(x$fract.prot.cell))
 }
 
-# Combine congeners according to analytical method ------------------------
+A1254.liquid <- do.call(rbind, lapply(A1254.groups,
+                                      combine_PCB_group,
+                                      data = A1254.model,
+                                      weight_col = "A1254_fractionV1"))
 
-A1254.final <- do.call(
-  rbind,
-  lapply(
-    A1254.groups$congener,
-    combine_PCB_group,
-    data = A1254.model
-  )
+A1254.gas <- do.call(rbind, lapply(A1254.groups,
+                                   combine_PCB_group,
+                                   data = A1254.model,
+                                   weight_col = "A1254_fractionV2"))
+
+# Quality-control checks --------------------------------------------------
+# 1. Check analytical group names and order
+identical(A1254.liquid$congener, A1254_Le$congener)
+identical(A1254.gas$congener, A1254_Le$congener)
+
+# 2. Check total Aroclor composition
+sum(A1254.liquid$A1254_fraction)
+sum(A1254.gas$A1254_fraction)
+
+# 3. Whole-dish mass balance
+# medium + cell + air = 1
+A1254.liquid$sum.dish <- A1254.liquid$fract.diss.m + A1254.liquid$fract.cell +
+  A1254.liquid$fract.air
+
+A1254.gas$sum.dish <- A1254.gas$fract.diss.m + A1254.gas$fract.cell +
+  A1254.gas$fract.air
+
+range(A1254.liquid$sum.dish)
+range(A1254.gas$sum.dish)
+
+# 4. Within-cell mass balance
+# dissolved intracellular + lipid + protein = 1
+
+A1254.liquid$sum.cell <- A1254.liquid$fract.diss.cell.cell +
+  A1254.liquid$fract.lip.cell + A1254.liquid$fract.prot.cell
+
+A1254.gas$sum.cell <- A1254.gas$fract.diss.cell.cell +
+  A1254.gas$fract.lip.cell + A1254.gas$fract.prot.cell
+
+range(A1254.liquid$sum.cell)
+range(A1254.gas$sum.cell)
+
+# 5. Check for missing values
+anyNA(A1254.liquid)
+anyNA(A1254.gas)
+
+# 6. Check that all fractions are between 0 and 1
+
+fraction_cols <- c(
+  "fract.diss.m",
+  "fract.diss.cell",
+  "fract.lip",
+  "fract.prot",
+  "fract.air",
+  "fract.cell",
+  "fract.diss.cell.cell",
+  "fract.lip.cell",
+  "fract.prot.cell"
 )
 
-# Mass-balance checks -----------------------------------------------------
-
-A1254.final$V1_sum <-
-  A1254.final$V1_diss_m +
-  A1254.final$V1_cell +
-  A1254.final$V1_air
-
-A1254.final$V2_sum <-
-  A1254.final$V2_diss_m +
-  A1254.final$V2_cell +
-  A1254.final$V2_air
+range(A1254.liquid[, fraction_cols])
+range(A1254.gas[, fraction_cols])
 
 
-# Per analytical group
-range(
-  A1254.final$V1_sum -
-    A1254.final$A1254_fractionV1
-)
-
-range(
-  A1254.final$V2_sum -
-    A1254.final$A1254_fractionV2
-)
-
-
-# Entire Aroclor composition
-sum(A1254.final$A1254_fractionV1)
-sum(A1254.final$A1254_fractionV2)
-
-# Entire modeled Aroclor distribution
-sum(A1254.final$V1_sum)
-sum(A1254.final$V2_sum)
-
-# Congener profile within cells -------------------------------------------
-
-A1254.final$V1_cell_profile <-
-  A1254.final$V1_cell /
-  sum(A1254.final$V1_cell)
-
-A1254.final$V2_cell_profile <-
-  A1254.final$V2_cell /
-  sum(A1254.final$V2_cell)
-
-# Check
-sum(A1254.final$V1_cell_profile)
-sum(A1254.final$V2_cell_profile)
-
-exclude_PCBs <- c("PCB128", "PCB166")
-
-A1254.model$A1254_fractionV1_reported <-
-  A1254.model$A1254_fractionV1
-
-A1254.model$A1254_fractionV2_reported <-
-  A1254.model$A1254_fractionV2
-
-# Exclude PCB128 and PCB166
-A1254.model$A1254_fractionV1_reported[
-  A1254.model$congener %in% exclude_PCBs
-] <- 0
-
-A1254.model$A1254_fractionV2_reported[
-  A1254.model$congener %in% exclude_PCBs
-] <- 0
-
-# Renormalize reportable composition
-A1254.model$A1254_fractionV1_reported <-
-  A1254.model$A1254_fractionV1_reported /
-  sum(A1254.model$A1254_fractionV1_reported)
-
-A1254.model$A1254_fractionV2_reported <-
-  A1254.model$A1254_fractionV2_reported /
-  sum(A1254.model$A1254_fractionV2_reported)
-
-sum(A1254.model$A1254_fractionV1_reported)
-sum(A1254.model$A1254_fractionV2_reported)
-
-sum(A1254.final$A1254_fractionV1)
-sum(A1254.final$A1254_fractionV2)
-
-sum(A1254.final$V1_sum)
-sum(A1254.final$V2_sum)
-
-A1254.model[
-  A1254.model$congener %in% c("PCB128", "PCB166"),
-  c(
-    "congener",
-    "A1254_fractionV1",
-    "A1254_fractionV1_reported",
-    "A1254_fractionV2",
-    "A1254_fractionV2_reported"
-  )
-]
-
-sum(
-  A1254.model$A1254_fractionV1_reported[
-    !A1254.model$congener %in% c("PCB128", "PCB166")
-  ]
-)
-
-sum(
-  A1254.model$A1254_fractionV2_reported[
-    !A1254.model$congener %in% c("PCB128", "PCB166")
-  ]
-)
-
-# Plots -------------------------------------------------------------------
-# Figure 7 (A). Just fractions in cell, medium and air
-# Create data.frame with needed fractions
-p.1 <- final.result[,!names(final.result) %in% c("fract.diss.cell",
-                              "fract.lip", "fract.prot",
-                              "fract.diss.cell.cell",
-                              "fract.lip.cell", "fract.prot.cell")]
-# Transform data.frame p.1 to 3 column data.frame
-p.1.plot <- melt(p.1, id.var = c("congener"),
-                variable.name = "phase", value.name = "fraction")
-# Name the compounds
-p.1.plot$congener <- factor(p.1.plot$congener,
-                           levels = c('PCB3', '4-OH-PCB3', '4-OH-PCB3 sulfate',
-                                      'PCB11', '4-OH-PCB11', '4-OH-PCB11 sulfate',
-                                      'PCB25', '4-OH-PCB25', '4-OH-PCB25 sulfate',
-                                      'PCB52', '4-OH-PCB52', '4-OH-PCB52 sulfate'))
-# Organize fraction to be displayed in plot
-p.1.plot$phase <- factor(p.1.plot$phase,
-                        levels = c('fract.air', 'fract.diss.m',
-                                   'fract.cell'))
-# Plot (Figure 7 (A))
-ggplot(p.1.plot, aes(x = congener, y = fraction, fill = phase)) + 
-  geom_bar(stat = "identity", col = "white", width = 0.9) +
-  scale_fill_manual(labels = c("air" , "medium", "cell"),
-                    values = c("#fee8c8", "#fdbb84", "#e34a33")) +
-  theme_classic() +
-  theme(aspect.ratio = 10/10,
-        text = element_text(size = 14, family = "Helvetica",
-                            face = "bold", color = "black")) +
-  xlab(expression(bold(""))) +
-  ylab(expression("Fraction in well")) +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
-
-# Figure 7 (B). Just fractions inside cell, i.e., protein, lipids and liquid/cytosol
-# Create data.frame with needed fractions
-p.2 <- final.result[,!names(final.result) %in% c("fract.diss.m", "fract.diss.cell",
-                                                 "fract.lip", "fract.prot",
-                                                 "fract.air", "fract.cell")]
-# Transform data.frame p.1 to 3 column data.frame
-p.2.plot <- melt(p.2, id.var = c("congener"),
-                 variable.name = "phase", value.name = "fraction")
-# Name the compounds
-p.2.plot$congener <- factor(p.2.plot$congener,
-                            levels = c('PCB3', '4-OH-PCB3', '4-OH-PCB3 sulfate',
-                                       'PCB11', '4-OH-PCB11', '4-OH-PCB11 sulfate',
-                                       'PCB25', '4-OH-PCB25', '4-OH-PCB25 sulfate',
-                                       'PCB52', '4-OH-PCB52', '4-OH-PCB52 sulfate'))
-# Organize fraction to be displayed in plot
-p.2.plot$phase <- factor(p.2.plot$phase,
-                         levels = c('fract.lip.cell', 'fract.diss.cell.cell',
-                                    'fract.prot.cell'))
-# Plot (Figure 7 (B))
-ggplot(p.2.plot, aes(x = congener, y = fraction, fill = phase)) + 
-  geom_bar(stat = "identity", col = "white", width = 0.9) +
-  scale_fill_manual(labels = c("lipid" , "liquid/cytosol", "protein"),
-                    values = c("#fee0d2", "#fc9272", "#de2d26")) +
-  theme_classic() +
-  theme(aspect.ratio = 10/10,
-        text = element_text(size = 14, family = "Helvetica",
-                            face = "bold", color = "black")) +
-  xlab(expression(bold(""))) +
-  ylab(expression("Fraction in cell")) +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))

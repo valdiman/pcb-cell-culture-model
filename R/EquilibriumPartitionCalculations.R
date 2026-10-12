@@ -19,7 +19,6 @@ calc_logK <- function(E, S, A, B, V, L,
   e * E + s * S + a * A + b * B + v * V + l * L + c
 }
 
-
 # Geisler, A.; Endo, S.; Goss, K.-U. Environ. Sci. Technol. 2012, 46, 9519-9524.
 pcb$logK_lipid_water <- calc_logK(E = pcb$E, S = pcb$S, A = pcb$A,
                                   B = pcb$B, V = pcb$V, L = pcb$L,
