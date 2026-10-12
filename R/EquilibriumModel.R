@@ -330,4 +330,97 @@ fraction_cols <- c(
 range(A1254.liquid[, fraction_cols])
 range(A1254.gas[, fraction_cols])
 
+# Export results
+write.csv(A1254.liquid, file = "Output/Data/PCB_fractions_A1254_liquid.csv",
+          row.names = FALSE)
+write.csv(A1254.gas, file = "Output/Data/PCB_fractions_A1254_gas.csv",
+          row.names = FALSE)
+
+# Plots -------------------------------------------------------------------
+# Select PCB congeners to plot
+selected_PCBs <- c(
+  "PCB3",
+  "PCB11",
+  "PCB25",
+  "PCB52",
+  "PCB101",
+  "PCB153")
+
+# Check that all selected congeners exist
+missing_PCBs <- selected_PCBs[!selected_PCBs %in% final.result$congener]
+
+if (length(missing_PCBs) > 0) {
+  stop(paste("Congeners not found:", paste(missing_PCBs, collapse = ", ")))
+}
+
+# Figure A: fractions in medium, cells and air ----------------------------
+# Select congeners and fractions
+p.1 <- final.result[
+  final.result$congener %in% selected_PCBs,
+  c("congener", "fract.diss.m", "fract.cell", "fract.air")]
+
+# Preserve selected PCB order
+p.1$congener <- factor(p.1$congener, levels = selected_PCBs)
+
+# Convert to long format
+p.1.plot <- melt(p.1, id.var = "congener", variable.name = "phase",
+                 value.name = "fraction")
+
+# Set stacking order
+p.1.plot$phase <- factor(p.1.plot$phase,
+                         levels = c("fract.air", "fract.diss.m",
+                                    "fract.cell"))
+
+# Plot
+plot.dish <- ggplot(p.1.plot, aes(x = congener, y = fraction, fill = phase)) +
+  geom_bar(stat = "identity", col = "white", width = 0.9) +
+  scale_fill_manual(labels = c("air", "medium", "cell"),
+                    values = c("#fee8c8", "#fdbb84", "#e34a33")) +
+  theme_classic() +
+  theme(aspect.ratio = 1, text = element_text(size = 14, family = "Helvetica",
+                                              face = "bold", color = "black"),
+        axis.text.x = element_text(angle = 60, hjust = 1)) +
+  xlab("") +
+  ylab("Fraction in dish")
+
+plot.dish
+
+# Figure B: fractions within cells ----------------------------------------
+p.2 <- final.result[
+  final.result$congener %in% selected_PCBs,
+  c("congener", "fract.diss.cell.cell", "fract.lip.cell", "fract.prot.cell")]
+
+# Preserve selected PCB order
+p.2$congener <- factor(p.2$congener, levels = selected_PCBs)
+
+# Convert to long format
+p.2.plot <- melt(p.2, id.var = "congener", variable.name = "phase",
+                 value.name = "fraction")
+
+# Set stacking order
+p.2.plot$phase <- factor(p.2.plot$phase,
+                         levels = c("fract.lip.cell",
+                                    "fract.diss.cell.cell",
+                                    "fract.prot.cell"))
+
+# Plot
+plot.cell <- ggplot(p.2.plot, aes(x = congener, y = fraction, fill = phase)) +
+  geom_bar(stat = "identity", col = "white", width = 0.9) +
+  scale_fill_manual(labels = c("lipid", "liquid/cytosol", "protein"),
+                    values = c("#fee0d2", "#fc9272", "#de2d26")) +
+  theme_classic() +
+  theme(aspect.ratio = 1, text = element_text(size = 14, family = "Helvetica",
+                                              face = "bold", color = "black"),
+        axis.text.x = element_text(angle = 60, hjust = 1)) +
+  xlab("") +
+  ylab("Fraction in cell")
+
+plot.cell
+
+
+
+
+
+
+
 
