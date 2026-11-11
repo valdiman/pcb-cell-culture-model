@@ -1,5 +1,8 @@
-# Code developed to calculate fractions of PCBs in Aroclor 1254
-# in 35-mm disc experiments (24 hours) and create figures
+# Model developed to calculate the equilibrium distribution of PCBs
+# in Aroclor 1254 among medium, cells, and headspace in 35-mm cell-culture
+# dish experiments (24-h exposure). Cellular PCB fractions are further
+# partitioned among intracellular water, lipids, and proteins.
+# The script also generates figures for model results.
 
 # Install packages and load libraries -------------------------------------
 # Packages
@@ -163,43 +166,55 @@ idx <- match(A1254$congener, final.result$congener)
 A1254$congener[is.na(idx)]
 
 # Combine composition with PCB-specific fraction results
-A1254.model <- cbind(A1254, final.result[idx, setdiff(names(final.result),
-                                                      c("congener")),
-                                         drop = FALSE])
+A1254.model <- cbind(A1254,
+                     final.result[idx, setdiff(names(final.result),
+                                               c("congener")),
+                                  drop = FALSE])
 
-# Analytical reporting exclusions ----------------------------------------
-# PCB204 is used as an internal standard.
-A1254_Le <- read.csv("Data/Aroclor1254_Lehmler.csv", stringsAsFactors = FALSE)
+# Analytical reporting / coelution grouping -------------------------------
+# PCB204 is used as an internal standard and is not included
+# in the analytical reporting groups.
+A1254_Le <- read.csv("Data/Aroclor1254_Lehmler.csv",
+                     stringsAsFactors = FALSE)
 A1254.groups <- A1254_Le$congener
 
+# Function to calculate fractions for analytical PCB groups ----------------
 combine_PCB_group <- function(group_name, data, weight_col) {
+  
   # Example:
   # "PCB4/10" -> c("PCB4", "PCB10")
-  pcb_numbers <- strsplit(sub("^PCB", "", group_name), "/")[[1]]
+  pcb_numbers <- strsplit(
+    sub("^PCB", "", group_name),
+    "/"
+  )[[1]]
   
   pcb_names <- paste0("PCB", pcb_numbers)
   
-  # Select congeners belonging to analytical group
+  # Select individual PCB model results
   x <- data[data$congener %in% pcb_names, ]
   
-  # Check that all expected congeners were found
+  # Check that all congeners were found
   if (nrow(x) != length(pcb_names)) {
-    warning(paste("Not all congeners found for group:", group_name))
+    stop(
+      paste(
+        "Missing PCB(s) for analytical group:",
+        group_name
+      )
+    )
   }
   
-  # Aroclor abundance
+  # Frame abundances used ONLY as internal weights
   w <- x[[weight_col]]
-  w_total <- sum(w)
   
-  # Individual congener
+  # Individual PCB --------------------------------------------------------
+  # Keep its original modeled fractions regardless of its
+  # abundance in the Aroclor composition.
   
   if (length(pcb_names) == 1) {
     
     return(
       data.frame(
         congener = group_name,
-        A1254_fraction = w_total,
-        
         fract.diss.m = x$fract.diss.m,
         fract.diss.cell = x$fract.diss.cell,
         fract.lip = x$fract.lip,
@@ -208,113 +223,286 @@ combine_PCB_group <- function(group_name, data, weight_col) {
         fract.cell = x$fract.cell,
         fract.diss.cell.cell = x$fract.diss.cell.cell,
         fract.lip.cell = x$fract.lip.cell,
-        fract.prot.cell = x$fract.prot.cell))
+        fract.prot.cell = x$fract.prot.cell
+      )
+    )
   }
   
-  # Coeluting congeners with nonzero Aroclor abundance
+  # Coeluting PCB group ---------------------------------------------------
+  # Frame composition is used only to determine the relative
+  # contribution of each individual congener to the group.
   
-  if (w_total > 0) {
+  if (sum(w) > 0) {
+    
+    # Relative contribution of each PCB
+    w <- w / sum(w)
+    
+  } else {
+    
+    # If all congeners have zero abundance in Frame,
+    # use equal weighting as a fallback.
+    w <- rep(1 / length(w), length(w))
+  }
+  
+  # Calculate composition-weighted group fractions
+  data.frame(
+    congener = group_name,
+    
+    fract.diss.m =
+      sum(w * x$fract.diss.m),
+    
+    fract.diss.cell =
+      sum(w * x$fract.diss.cell),
+    
+    fract.lip =
+      sum(w * x$fract.lip),
+    
+    fract.prot =
+      sum(w * x$fract.prot),
+    
+    fract.air =
+      sum(w * x$fract.air),
+    
+    fract.cell =
+      sum(w * x$fract.cell),
+    
+    fract.diss.cell.cell =
+      sum(w * x$fract.diss.cell.cell),
+    
+    fract.lip.cell =
+      sum(w * x$fract.lip.cell),
+    
+    fract.prot.cell =
+      sum(w * x$fract.prot.cell)
+  )
+}
+
+# Aroclor 1254 analytical grouping ----------------------------------------
+# From Lehmler analytical grouping and measured liquid/vapor composition
+# Analytical groups:
+# e.g., PCB1, PCB4/10, PCB7/9, PCB12/13, etc.
+A1254.groups <- A1254_Le$congener
+
+# Function to calculate modeled fractions for analytical groups ------------
+#
+# Individual congeners:
+#   Keep the original modeled fractions from final.result.
+#
+# Coeluting groups:
+#   Combine the individual PCB modeled fractions using their relative
+#   abundance in the Frame liquid Aroclor 1254 composition.
+#
+# IMPORTANT:
+#   Frame is used ONLY to determine the relative contribution of individual
+#   congeners within coeluting analytical groups. The final abundance of
+#   each analytical group is taken directly from the Lehmler liquid or
+#   vapor measurements.
+
+combine_PCB_group <- function(group_name, data, weight_col) {
+  
+  # Example:
+  # "PCB4/10" -> c("PCB4", "PCB10")
+  pcb_numbers <- strsplit(
+    sub("^PCB", "", group_name),
+    "/"
+  )[[1]]
+  
+  pcb_names <- paste0("PCB", pcb_numbers)
+  
+  # Select individual PCB model results
+  x <- data[data$congener %in% pcb_names, ]
+  
+  # Check that all expected PCBs were found
+  if (nrow(x) != length(pcb_names)) {
+    stop(
+      paste(
+        "Missing PCB(s) for analytical group:",
+        group_name
+      )
+    )
+  }
+  
+  # Individual congener ---------------------------------------------------
+  if (length(pcb_names) == 1) {
     
     return(
       data.frame(
         congener = group_name,
-        A1254_fraction = w_total,
-        
-        fract.diss.m =
-          sum(w * x$fract.diss.m) / w_total,
-        
-        fract.diss.cell =
-          sum(w * x$fract.diss.cell) / w_total,
-        
-        fract.lip =
-          sum(w * x$fract.lip) / w_total,
-        
-        fract.prot =
-          sum(w * x$fract.prot) / w_total,
-        
-        fract.air =
-          sum(w * x$fract.air) / w_total,
-        
-        fract.cell =
-          sum(w * x$fract.cell) / w_total,
-        
-        fract.diss.cell.cell =
-          sum(w * x$fract.diss.cell.cell) / w_total,
-        
-        fract.lip.cell =
-          sum(w * x$fract.lip.cell) / w_total,
-        
-        fract.prot.cell =
-          sum(w * x$fract.prot.cell) / w_total))
+        fract.diss.m = x$fract.diss.m,
+        fract.diss.cell = x$fract.diss.cell,
+        fract.lip = x$fract.lip,
+        fract.prot = x$fract.prot,
+        fract.air = x$fract.air,
+        fract.cell = x$fract.cell,
+        fract.diss.cell.cell = x$fract.diss.cell.cell,
+        fract.lip.cell = x$fract.lip.cell,
+        fract.prot.cell = x$fract.prot.cell
+      )
+    )
   }
   
-  # Coeluting group with zero abundance
-  # Weighted averaging is impossible because all weights are zero.
-  # Use unweighted mean of the individual PCB partition fractions.
+  # Coeluting congeners ---------------------------------------------------
+  # Frame LIQUID abundances used only as internal weights
+  w <- x[[weight_col]]
   
+  if (sum(w) > 0) {
+    
+    # Convert abundances to relative weights within group
+    w <- w / sum(w)
+    
+  } else {
+    
+    # Frame contains no information about relative composition.
+    # Equal weighting is used as a fallback.
+    w <- rep(1 / length(w), length(w))
+  }
+  
+  # Calculate weighted modeled fractions
   data.frame(
     congener = group_name,
-    A1254_fraction = 0,
     
-    fract.diss.m = mean(x$fract.diss.m),
-    fract.diss.cell = mean(x$fract.diss.cell),
-    fract.lip = mean(x$fract.lip),
-    fract.prot = mean(x$fract.prot),
-    fract.air = mean(x$fract.air),
-    fract.cell = mean(x$fract.cell),
-    fract.diss.cell.cell = mean(x$fract.diss.cell.cell),
-    fract.lip.cell = mean(x$fract.lip.cell),
-    fract.prot.cell = mean(x$fract.prot.cell))
+    fract.diss.m =
+      sum(w * x$fract.diss.m),
+    
+    fract.diss.cell =
+      sum(w * x$fract.diss.cell),
+    
+    fract.lip =
+      sum(w * x$fract.lip),
+    
+    fract.prot =
+      sum(w * x$fract.prot),
+    
+    fract.air =
+      sum(w * x$fract.air),
+    
+    fract.cell =
+      sum(w * x$fract.cell),
+    
+    fract.diss.cell.cell =
+      sum(w * x$fract.diss.cell.cell),
+    
+    fract.lip.cell =
+      sum(w * x$fract.lip.cell),
+    
+    fract.prot.cell =
+      sum(w * x$fract.prot.cell)
+  )
 }
 
-A1254.liquid <- do.call(rbind, lapply(A1254.groups,
-                                      combine_PCB_group,
-                                      data = A1254.model,
-                                      weight_col = "A1254_fractionV1"))
+# Calculate modeled fractions for analytical groups -----------------------
+# Use ONLY the Frame liquid composition for resolving coelution.
+# Here A1254_fractionV1 is assumed to be the Frame liquid composition.
+A1254.grouped <- do.call(
+  rbind,
+  lapply(
+    A1254.groups,
+    combine_PCB_group,
+    data = A1254.model,
+    weight_col = "A1254_fractionV1"
+  )
+)
 
-A1254.gas <- do.call(rbind, lapply(A1254.groups,
-                                   combine_PCB_group,
-                                   data = A1254.model,
-                                   weight_col = "A1254_fractionV2"))
+# Liquid Aroclor 1254 -----------------------------------------------------
+A1254.liquid <- A1254.grouped
+
+# Authoritative measured liquid abundance from Lehmler
+A1254.liquid$A1254_fraction <-
+  A1254_Le$A1254_liquid_percentage
+
+# Gas Aroclor 1254 --------------------------------------------------------
+A1254.gas <- A1254.grouped
+
+# Authoritative measured vapor abundance from Lehmler
+A1254.gas$A1254_fraction <-
+  A1254_Le$A1254_vapor_percentage
+
+# Organize columns --------------------------------------------------------
+# Put measured Aroclor abundance immediately after congener
+A1254.liquid <- A1254.liquid[
+  c(
+    "congener",
+    "A1254_fraction",
+    setdiff(
+      names(A1254.liquid),
+      c("congener", "A1254_fraction")
+    )
+  )
+]
+
+A1254.gas <- A1254.gas[
+  c(
+    "congener",
+    "A1254_fraction",
+    setdiff(
+      names(A1254.gas),
+      c("congener", "A1254_fraction")
+    )
+  )
+]
 
 # Quality-control checks --------------------------------------------------
-# 1. Check analytical group names and order
-identical(A1254.liquid$congener, A1254_Le$congener)
-identical(A1254.gas$congener, A1254_Le$congener)
+# 1. Number of analytical groups
+nrow(A1254.liquid) == nrow(A1254_Le)
+nrow(A1254.gas) == nrow(A1254_Le)
 
-# 2. Check total Aroclor composition
-sum(A1254.liquid$A1254_fraction)
-sum(A1254.gas$A1254_fraction)
+# 2. Same congeners and order as Lehmler
+identical(
+  A1254.liquid$congener,
+  A1254_Le$congener
+)
 
-# 3. Whole-dish mass balance
+identical(
+  A1254.gas$congener,
+  A1254_Le$congener
+)
+
+# 3. Final Aroclor abundance must reproduce Lehmler exactly
+all.equal(
+  A1254.liquid$A1254_fraction,
+  A1254_Le$A1254_liquid_percentage
+)
+
+all.equal(
+  A1254.gas$A1254_fraction,
+  A1254_Le$A1254_vapor_percentage
+)
+
+# 4. Whole-dish mass balance ----------------------------------------------
 # medium + cell + air = 1
-A1254.liquid$sum.dish <- A1254.liquid$fract.diss.m + A1254.liquid$fract.cell +
+A1254.liquid$sum.dish <-
+  A1254.liquid$fract.diss.m +
+  A1254.liquid$fract.cell +
   A1254.liquid$fract.air
 
-A1254.gas$sum.dish <- A1254.gas$fract.diss.m + A1254.gas$fract.cell +
+A1254.gas$sum.dish <-
+  A1254.gas$fract.diss.m +
+  A1254.gas$fract.cell +
   A1254.gas$fract.air
 
 range(A1254.liquid$sum.dish)
 range(A1254.gas$sum.dish)
 
-# 4. Within-cell mass balance
-# dissolved intracellular + lipid + protein = 1
+# 5. Within-cell mass balance ---------------------------------------------
+# intracellular water + lipid + protein = 1
+A1254.liquid$sum.cell <-
+  A1254.liquid$fract.diss.cell.cell +
+  A1254.liquid$fract.lip.cell +
+  A1254.liquid$fract.prot.cell
 
-A1254.liquid$sum.cell <- A1254.liquid$fract.diss.cell.cell +
-  A1254.liquid$fract.lip.cell + A1254.liquid$fract.prot.cell
-
-A1254.gas$sum.cell <- A1254.gas$fract.diss.cell.cell +
-  A1254.gas$fract.lip.cell + A1254.gas$fract.prot.cell
+A1254.gas$sum.cell <-
+  A1254.gas$fract.diss.cell.cell +
+  A1254.gas$fract.lip.cell +
+  A1254.gas$fract.prot.cell
 
 range(A1254.liquid$sum.cell)
 range(A1254.gas$sum.cell)
 
-# 5. Check for missing values
+# 6. Check for missing values ---------------------------------------------
 anyNA(A1254.liquid)
 anyNA(A1254.gas)
 
-# 6. Check that all fractions are between 0 and 1
-
+# 7. Check that all modeled fractions are between 0 and 1 -----------------
 fraction_cols <- c(
   "fract.diss.m",
   "fract.diss.cell",
@@ -330,10 +518,42 @@ fraction_cols <- c(
 range(A1254.liquid[, fraction_cols])
 range(A1254.gas[, fraction_cols])
 
-# Export results
-write.csv(A1254.liquid, file = "Output/Data/PCB_fractions_A1254_liquid.csv",
+# 8. Liquid and gas must have identical MODELED fractions -----------------
+# They differ only in measured Aroclor abundance.
+# Both use Frame liquid composition to resolve coelution.
+
+all.equal(
+  A1254.liquid[, fraction_cols],
+  A1254.gas[, fraction_cols],
+  check.attributes = FALSE
+)
+
+# 9. Individual non-coeluting PCBs must match final.result ----------------
+individual_groups <- A1254_Le$congener[
+  !grepl("/", A1254_Le$congener)
+]
+
+idx_original <- match(
+  individual_groups,
+  final.result$congener
+)
+
+idx_grouped <- match(
+  individual_groups,
+  A1254.grouped$congener
+)
+
+all.equal(
+  A1254.grouped[idx_grouped, fraction_cols],
+  final.result[idx_original, fraction_cols],
+  check.attributes = FALSE
+)
+
+# Export results ----------------------------------------------------------
+write.csv(A1254.liquid, file = "Output/Data/PCB_fractions_A1254_liquidV2.csv",
           row.names = FALSE)
-write.csv(A1254.gas, file = "Output/Data/PCB_fractions_A1254_gas.csv",
+
+write.csv(A1254.gas, file = "Output/Data/PCB_fractions_A1254_gasV2.csv",
           row.names = FALSE)
 
 # Plots -------------------------------------------------------------------
